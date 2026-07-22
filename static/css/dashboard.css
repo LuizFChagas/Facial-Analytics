@@ -1,0 +1,196 @@
+:root {
+  --surface-page:   #f2f1ec;
+  --surface-card:   #fcfcfb;
+  --ink-primary:    #14140f;
+  --ink-secondary:  #52514e;
+  --ink-muted:      #898781;
+  --border:         rgba(11, 11, 11, 0.10);
+  --grid-line:      #e1e0d9;
+
+  --accent-piscadas: #2a78d6;
+  --accent-bocejos:  #eb6834;
+  --accent-critical: #d03b3b;
+
+  --tag-bg:   #eef1e9;
+  --tag-ink:  #45633a;
+  --tag-critical-bg:  #fbeceb;
+  --tag-critical-ink: #a5332f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-page:   #111110;
+    --surface-card:   #1a1a19;
+    --ink-primary:    #ffffff;
+    --ink-secondary:  #c3c2b7;
+    --ink-muted:      #8f8d86;
+    --border:         rgba(255, 255, 255, 0.12);
+    --grid-line:      #2c2c2a;
+
+    --accent-piscadas: #3987e5;
+    --accent-bocejos:  #d95926;
+    --accent-critical: #e66767;
+
+    --tag-bg:   #26301f;
+    --tag-ink:  #a9c99a;
+    --tag-critical-bg:  #351f1e;
+    --tag-critical-ink: #e6a3a1;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--surface-page);
+  color: var(--ink-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  padding: clamp(18px, 4vw, 48px);
+}
+
+.wrap { max-width: 1100px; margin: 0 auto; }
+
+header { margin-bottom: 20px; }
+header h1 {
+  font-size: clamp(22px, 3vw, 30px);
+  margin: 0 0 6px;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+header p {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--ink-secondary);
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  margin: 22px 0 18px;
+  border-bottom: 1px solid var(--border);
+}
+.tab-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--ink-muted);
+  font: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 8px 4px 12px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tab-btn:hover { color: var(--ink-primary); }
+.tab-btn.is-active {
+  color: var(--ink-primary);
+  border-bottom-color: var(--accent-piscadas);
+}
+.tab-btn:focus-visible {
+  outline: 2px solid var(--accent-piscadas);
+  outline-offset: 2px;
+}
+
+.painel {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+.painel.is-hidden { display: none; }
+
+.card {
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.card-head h2 { font-size: 15px; margin: 0; font-weight: 600; }
+
+.tag {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--tag-ink);
+  background: var(--tag-bg);
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.tag-critical {
+  color: var(--tag-critical-ink);
+  background: var(--tag-critical-bg);
+}
+.muted { font-size: 12px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+
+.plot { width: 100%; height: 340px; }
+.plot-split { height: 220px; }
+
+.table-scroll { overflow-x: auto; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+thead th {
+  text-align: left;
+  color: var(--ink-muted);
+  font-weight: 600;
+  font-size: 11.5px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--surface-card);
+}
+tbody td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--grid-line);
+  color: var(--ink-secondary);
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { color: var(--ink-primary); }
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+tbody tr.linha-pico td { color: var(--accent-critical); font-weight: 600; }
+
+.emoji-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--tag-bg);
+  color: var(--tag-ink);
+  font-size: 12.5px;
+}
+
+.table-scroll { max-height: 260px; overflow-y: auto; }
+
+footer {
+  margin-top: 22px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+footer code {
+  background: var(--tag-bg);
+  color: var(--tag-ink);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11.5px;
+}
