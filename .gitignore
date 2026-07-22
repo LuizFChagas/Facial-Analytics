@@ -1,0 +1,22 @@
+# Ambiente virtual
+venv/
+.venv/
+env/
+
+# Cache Python
+__pycache__/
+*.pyc
+
+# Dados gerados pelos scripts (CSV de leituras e capturas)
+data/*.csv
+data/capturas/
+
+# Graficos gerados
+graficos/*.png
+
+# Configuracoes de IDE
+.vscode/
+.idea/
+
+# Modelos baixados por fer/mediapipe em tempo de execucao
+*.h5
