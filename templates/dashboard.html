@@ -20,15 +20,17 @@
     </nav>
 
     <section id="painel-humor" class="painel" data-panel="humor">
-      <div class="card card-chart">
+      <div id="kpis-humor" class="kpis entra"></div>
+
+      <div class="card card-chart entra">
         <div class="card-head">
           <h2>Humor ao longo do expediente</h2>
           <span id="humor-fonte" class="tag">carregando…</span>
         </div>
-        <div id="grafico-humor" class="plot"></div>
+        <div id="grafico-humor" class="plot plot-tall"></div>
       </div>
 
-      <div class="card card-table">
+      <div class="card card-table entra">
         <div class="card-head">
           <h2>Leituras</h2>
           <span id="humor-contagem" class="muted"></span>
@@ -50,7 +52,9 @@
     </section>
 
     <section id="painel-fadiga" class="painel is-hidden" data-panel="fadiga">
-      <div class="card card-chart">
+      <div id="kpis-fadiga" class="kpis entra"></div>
+
+      <div class="card card-chart entra">
         <div class="card-head">
           <h2>Piscadas por minuto</h2>
           <span id="fadiga-fonte" class="tag">carregando…</span>
@@ -58,7 +62,7 @@
         <div id="grafico-piscadas" class="plot plot-split"></div>
       </div>
 
-      <div class="card card-chart">
+      <div class="card card-chart entra">
         <div class="card-head">
           <h2>Bocejos por minuto</h2>
           <span id="fadiga-pico" class="tag tag-critical"></span>
@@ -66,7 +70,7 @@
         <div id="grafico-bocejos" class="plot plot-split"></div>
       </div>
 
-      <div class="card card-table card-table-wide">
+      <div class="card card-table card-table-wide entra">
         <div class="card-head">
           <h2>Leituras por minuto</h2>
           <span id="fadiga-contagem" class="muted"></span>
