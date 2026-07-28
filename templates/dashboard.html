@@ -17,18 +17,21 @@
     <nav class="tabs" role="tablist" aria-label="Modo de visualizacao">
       <button class="tab-btn is-active" data-tab="humor" role="tab" aria-selected="true">Humor do Dia</button>
       <button class="tab-btn" data-tab="fadiga" role="tab" aria-selected="false">Reuniao (Fadiga)</button>
+      <button class="tab-btn" data-tab="webcam" role="tab" aria-selected="false">Testar Webcam</button>
     </nav>
 
     <section id="painel-humor" class="painel" data-panel="humor">
-      <div class="card card-chart">
+      <div id="kpis-humor" class="kpis entra"></div>
+
+      <div class="card card-chart entra">
         <div class="card-head">
           <h2>Humor ao longo do expediente</h2>
           <span id="humor-fonte" class="tag">carregando…</span>
         </div>
-        <div id="grafico-humor" class="plot"></div>
+        <div id="grafico-humor" class="plot plot-tall"></div>
       </div>
 
-      <div class="card card-table">
+      <div class="card card-table entra">
         <div class="card-head">
           <h2>Leituras</h2>
           <span id="humor-contagem" class="muted"></span>
@@ -41,6 +44,7 @@
                 <th>Expressao</th>
                 <th class="num">Confianca</th>
                 <th class="num">Bem-estar</th>
+                <th class="col-acao"></th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -50,7 +54,9 @@
     </section>
 
     <section id="painel-fadiga" class="painel is-hidden" data-panel="fadiga">
-      <div class="card card-chart">
+      <div id="kpis-fadiga" class="kpis entra"></div>
+
+      <div class="card card-chart entra">
         <div class="card-head">
           <h2>Piscadas por minuto</h2>
           <span id="fadiga-fonte" class="tag">carregando…</span>
@@ -58,7 +64,7 @@
         <div id="grafico-piscadas" class="plot plot-split"></div>
       </div>
 
-      <div class="card card-chart">
+      <div class="card card-chart entra">
         <div class="card-head">
           <h2>Bocejos por minuto</h2>
           <span id="fadiga-pico" class="tag tag-critical"></span>
@@ -66,7 +72,7 @@
         <div id="grafico-bocejos" class="plot plot-split"></div>
       </div>
 
-      <div class="card card-table card-table-wide">
+      <div class="card card-table card-table-wide entra">
         <div class="card-head">
           <h2>Leituras por minuto</h2>
           <span id="fadiga-contagem" class="muted"></span>
@@ -79,6 +85,7 @@
                 <th>Horario</th>
                 <th class="num">Piscadas</th>
                 <th class="num">Bocejos</th>
+                <th class="col-acao"></th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -87,8 +94,54 @@
       </div>
     </section>
 
+    <section id="painel-webcam" class="painel is-hidden" data-panel="webcam">
+      <div class="card card-chart entra">
+        <div class="card-head">
+          <h2>Pre-visualizacao da camera</h2>
+          <span id="webcam-status" class="tag">desligada</span>
+        </div>
+        <div class="webcam-preview-wrap">
+          <video id="video-preview" autoplay playsinline muted></video>
+          <p id="webcam-aviso" class="webcam-aviso is-hidden"></p>
+        </div>
+        <div class="captura-controles">
+          <button id="btn-ligar-camera" class="botao botao-primario">Ligar camera</button>
+          <button id="btn-desligar-camera" class="botao" disabled>Desligar camera</button>
+        </div>
+        <p class="muted webcam-nota">Essa pre-visualizacao acessa a camera direto pelo navegador, so pra conferir o enquadramento. Desligue-a antes de iniciar uma captura de verdade abaixo — os dois processos nao conseguem usar a camera ao mesmo tempo.</p>
+      </div>
+
+      <div class="card entra">
+        <div class="card-head">
+          <h2>Captura — Humor do Dia</h2>
+          <span id="status-humor-captura" class="tag">parado</span>
+        </div>
+        <p class="muted">Tira um snapshot e classifica a expressao a cada X minutos, em segundo plano (sem janela). Acompanhe os resultados na aba "Humor do Dia".</p>
+        <div class="captura-controles">
+          <label class="campo-intervalo">
+            Intervalo (min)
+            <input type="number" id="input-intervalo-humor" value="15" min="1" max="120" />
+          </label>
+          <button id="btn-iniciar-humor" class="botao botao-primario">Iniciar captura</button>
+          <button id="btn-parar-humor" class="botao" disabled>Parar</button>
+        </div>
+      </div>
+
+      <div class="card entra">
+        <div class="card-head">
+          <h2>Captura — Reuniao (Fadiga)</h2>
+          <span id="status-fadiga-captura" class="tag">parado</span>
+        </div>
+        <p class="muted">Abre uma janela separada (fora do navegador) com a malha facial desenhada e os contadores ao vivo. Aperte "q" nela pra encerrar, ou use o botao "Parar" aqui.</p>
+        <div class="captura-controles">
+          <button id="btn-iniciar-fadiga" class="botao botao-primario">Iniciar captura</button>
+          <button id="btn-parar-fadiga" class="botao" disabled>Parar</button>
+        </div>
+      </div>
+    </section>
+
     <footer>
-      Fonte dos dados: <code>data/*.csv</code> quando existir; caso contrario, <code>exemplos/*.csv</code> (dados ficticios) so pra visualizacao.
+      Fonte dos dados: <code>data/*.csv</code>, gerado pelos scripts de captura (inicie pela aba "Testar Webcam").
     </footer>
   </div>
 
