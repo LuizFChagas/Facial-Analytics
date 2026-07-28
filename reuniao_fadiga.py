@@ -1,9 +1,10 @@
 """
 Modo 2 - Reuniao (deteccao de fadiga em tempo real)
 =====================================================
-Roda continuamente durante uma call, usando o MediaPipe Face Mesh para
-extrair 468 pontos (landmarks) do rosto a cada frame. A partir desses
-pontos calculamos duas metricas classicas de visao computacional:
+Roda continuamente durante uma call, usando o MediaPipe Face Landmarker
+(Tasks API) para extrair 478 pontos (landmarks) do rosto a cada frame. A
+partir desses pontos calculamos duas metricas classicas de visao
+computacional:
 
 - EAR (Eye Aspect Ratio): mede o quanto o olho esta aberto. Cai bruscamente
   durante uma piscada. Contando quedas rapidas do EAR, contamos piscadas.
@@ -15,6 +16,13 @@ pontos calculamos duas metricas classicas de visao computacional:
 A cada minuto fechado (contado a partir do inicio da execucao, nao do
 relogio), a contagem de piscadas e bocejos daquele minuto e salva no CSV.
 
+Nota tecnica: usamos a Tasks API (mp.tasks.vision.FaceLandmarker) em vez
+da API classica "mp.solutions.face_mesh" porque essa ultima ainda nao tem
+build do MediaPipe pra versoes recentes do Python (ex: 3.14) - o Google
+descontinuou os builds pre-compilados de "solutions" nesses casos, so a
+Tasks API (mais nova) esta disponivel. A logica de EAR/MAR e identica; so
+a forma de obter os landmarks do frame muda.
+
 Controles:
     q - encerra a captura (salva o minuto parcial em andamento antes de sair)
 
@@ -25,14 +33,20 @@ Uso:
 import csv
 import os
 import time
+import urllib.request
 from datetime import datetime
 
 import cv2
 import mediapipe as mp
 import numpy as np
+from mediapipe.tasks.python import vision
+from mediapipe.tasks.python.core import base_options as mp_base_options
 
 CAMINHO_CSV = os.path.join("data", "reuniao_fadiga.csv")
 CABECALHO_CSV = ["minuto", "timestamp", "piscadas", "bocejos"]
+
+CAMINHO_MODELO = os.path.join("modelos", "face_landmarker.task")
+URL_MODELO = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task"
 
 # --- Indices dos landmarks do MediaPipe Face Mesh usados no calculo ---
 # Cada olho e descrito por 6 pontos (p1..p6), na mesma convencao classica
@@ -88,6 +102,16 @@ def garantir_csv():
             csv.writer(arquivo).writerow(CABECALHO_CSV)
 
 
+def garantir_modelo():
+    """Baixa o modelo do Face Landmarker (uma vez) se ele ainda nao existir localmente."""
+    if os.path.isfile(CAMINHO_MODELO):
+        return
+    os.makedirs(os.path.dirname(CAMINHO_MODELO), exist_ok=True)
+    print(f"Baixando modelo do Face Landmarker em {CAMINHO_MODELO}...")
+    urllib.request.urlretrieve(URL_MODELO, CAMINHO_MODELO)
+    print("Modelo baixado.")
+
+
 def salvar_minuto(minuto, piscadas_no_minuto, bocejos_no_minuto):
     timestamp = datetime.now().isoformat(timespec="seconds")
     with open(CAMINHO_CSV, mode="a", newline="", encoding="utf-8") as arquivo:
@@ -95,16 +119,27 @@ def salvar_minuto(minuto, piscadas_no_minuto, bocejos_no_minuto):
     print(f"[minuto {minuto}] piscadas={piscadas_no_minuto} bocejos={bocejos_no_minuto} -> salvo em {CAMINHO_CSV}")
 
 
+def criar_landmarker():
+    """Monta o FaceLandmarker (Tasks API) em modo VIDEO, pra rodar frame a frame."""
+    opcoes = vision.FaceLandmarkerOptions(
+        base_options=mp_base_options.BaseOptions(model_asset_path=CAMINHO_MODELO),
+        running_mode=vision.RunningMode.VIDEO,
+        num_faces=1,
+        min_face_detection_confidence=0.5,
+        min_tracking_confidence=0.5,
+    )
+    return vision.FaceLandmarker.create_from_options(opcoes)
+
+
 def executar():
     garantir_csv()
-
-    mp_face_mesh = mp.solutions.face_mesh
-    mp_drawing = mp.solutions.drawing_utils
-    mp_drawing_styles = mp.solutions.drawing_styles
+    garantir_modelo()
 
     camera = cv2.VideoCapture(0)
     if not camera.isOpened():
         raise RuntimeError("Nao foi possivel acessar a webcam (indice 0).")
+
+    landmarker = criar_landmarker()
 
     # Estado dos contadores "por evento" (piscada/bocejo)
     frames_olho_fechado = 0
@@ -122,13 +157,7 @@ def executar():
 
     print("Reuniao (deteccao de fadiga) iniciada. Pressione 'q' para encerrar.\n")
 
-    with mp_face_mesh.FaceMesh(
-        max_num_faces=1,
-        refine_landmarks=True,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
-    ) as face_mesh:
-
+    try:
         while camera.isOpened():
             ok, frame = camera.read()
             if not ok:
@@ -136,12 +165,14 @@ def executar():
 
             altura, largura = frame.shape[:2]
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            resultado = face_mesh.process(frame_rgb)
+            imagem_mp = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
+            timestamp_ms = int((time.time() - tempo_inicio) * 1000)
+            resultado = landmarker.detect_for_video(imagem_mp, timestamp_ms)
 
             ear_medio, mar = None, None
 
-            if resultado.multi_face_landmarks:
-                landmarks = resultado.multi_face_landmarks[0].landmark
+            if resultado.face_landmarks:
+                landmarks = resultado.face_landmarks[0]
 
                 # EAR de cada olho, calculado separadamente e depois combinado.
                 # Usar a media dos dois olhos deixa a deteccao mais estavel do
@@ -175,12 +206,12 @@ def executar():
 
                 # Desenha a malha facial (referencia visual) e destaca os
                 # pontos usados no calculo de EAR/MAR
-                mp_drawing.draw_landmarks(
+                vision.drawing_utils.draw_landmarks(
                     image=frame,
-                    landmark_list=resultado.multi_face_landmarks[0],
-                    connections=mp_face_mesh.FACEMESH_CONTOURS,
+                    landmark_list=landmarks,
+                    connections=vision.FaceLandmarksConnections.FACE_LANDMARKS_CONTOURS,
                     landmark_drawing_spec=None,
-                    connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_contours_style(),
+                    connection_drawing_spec=vision.drawing_styles.get_default_face_mesh_contours_style(),
                 )
                 for x, y in pontos_em_pixels(landmarks, OLHO_DIREITO + OLHO_ESQUERDO, largura, altura):
                     cv2.circle(frame, (int(x), int(y)), 2, (214, 120, 42), -1)  # azul (BGR) - olhos
@@ -212,14 +243,16 @@ def executar():
             cv2.imshow("Reuniao - Deteccao de Fadiga (q para sair)", frame)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
+    finally:
+        landmarker.close()
+        camera.release()
+        cv2.destroyAllWindows()
 
     # Salva o minuto parcial em andamento ao encerrar, pra nao perder dados
     # de uma reuniao que nao termina exatamente num minuto fechado.
     if piscadas_no_minuto or bocejos_no_minuto:
         salvar_minuto(minuto_atual, piscadas_no_minuto, bocejos_no_minuto)
 
-    camera.release()
-    cv2.destroyAllWindows()
     print(f"\nSessao encerrada. Total: {piscadas_totais} piscadas, {bocejos_totais} bocejos.")
 
 
