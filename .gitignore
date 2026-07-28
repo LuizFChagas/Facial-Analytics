@@ -20,3 +20,4 @@ graficos/*.png
 
 # Modelos baixados por fer/mediapipe em tempo de execucao
 *.h5
+modelos/
