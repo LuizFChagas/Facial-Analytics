@@ -151,6 +151,14 @@ header p {
 .kpi .kpi-detalhe { font-size: 12px; color: var(--ink-secondary); }
 .kpi.kpi-acento .kpi-valor { color: var(--accent-piscadas); }
 .kpi.kpi-critico .kpi-valor { color: var(--accent-critical); }
+.kpi.kpi-vazio {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.kpi.kpi-vazio .kpi-detalhe { font-size: 13px; }
 .card-head {
   display: flex;
   align-items: baseline;
@@ -226,6 +234,13 @@ tbody tr:hover td { color: var(--ink-primary); }
 th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 tbody tr.linha-pico td { color: var(--accent-critical); font-weight: 600; }
+
+.linha-vazia {
+  text-align: center;
+  color: var(--ink-muted);
+  padding: 22px 10px;
+  font-size: 13px;
+}
 
 .col-acao { width: 32px; }
 .btn-excluir {

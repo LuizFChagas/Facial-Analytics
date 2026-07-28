@@ -5,9 +5,10 @@ Serve uma pagina unica com dois modos (Humor do Dia / Reuniao) e expoe os
 dados dos CSVs via API JSON pra pagina montar os graficos (Plotly) e a
 tabela no navegador.
 
-Se o CSV "de verdade" (gerado por humor_do_dia.py / reuniao_fadiga.py)
-ainda nao existir, cai pro CSV de exemplo em exemplos/ so pra a tela nao
-ficar vazia - a resposta da API sinaliza isso no campo "fonte".
+So mostra dados reais (gerados por humor_do_dia.py / reuniao_fadiga.py).
+Se o CSV ainda nao existir ou estiver vazio, a API responde com uma lista
+vazia e a pagina mostra um estado de "nenhuma leitura ainda" - sem dado
+ficticio de exemplo.
 
 Uso:
     python dashboard_app.py
@@ -43,10 +44,7 @@ processos_captura = {"humor": None, "fadiga": None}
 trava_processos = threading.Lock()
 
 CAMINHO_HUMOR_REAL = os.path.join("data", "humor_do_dia.csv")
-CAMINHO_HUMOR_EXEMPLO = os.path.join("exemplos", "humor_do_dia_exemplo.csv")
-
 CAMINHO_FADIGA_REAL = os.path.join("data", "reuniao_fadiga.csv")
-CAMINHO_FADIGA_EXEMPLO = os.path.join("exemplos", "reuniao_fadiga_exemplo.csv")
 
 # Mesma escala de bem-estar usada em gerar_grafico_humor.py - mantida aqui
 # tambem porque o dashboard e um consumidor independente do mesmo CSV.
@@ -61,13 +59,6 @@ ESCALA_BEM_ESTAR = {
 }
 
 
-def escolher_fonte(caminho_real, caminho_exemplo):
-    """Usa o CSV real se ele ja existir; caso contrario, cai pro exemplo."""
-    if os.path.isfile(caminho_real):
-        return caminho_real, "real"
-    return caminho_exemplo, "exemplo"
-
-
 @app.route("/")
 def index():
     return render_template("dashboard.html")
@@ -75,39 +66,38 @@ def index():
 
 @app.route("/api/humor")
 def api_humor():
-    caminho, fonte = escolher_fonte(CAMINHO_HUMOR_REAL, CAMINHO_HUMOR_EXEMPLO)
-    df = pd.read_csv(caminho, parse_dates=["timestamp"])
+    if not os.path.isfile(CAMINHO_HUMOR_REAL):
+        return jsonify({"fonte": "vazio", "registros": []})
+
+    df = pd.read_csv(CAMINHO_HUMOR_REAL, parse_dates=["timestamp"])
     df["valor_bem_estar"] = df["expressao"].map(ESCALA_BEM_ESTAR)
     df["timestamp"] = df["timestamp"].dt.strftime("%Y-%m-%dT%H:%M:%S")
 
     return jsonify({
-        "fonte": fonte,
+        "fonte": "vazio" if df.empty else "real",
         "registros": df.to_dict(orient="records"),
     })
 
 
 @app.route("/api/fadiga")
 def api_fadiga():
-    caminho, fonte = escolher_fonte(CAMINHO_FADIGA_REAL, CAMINHO_FADIGA_EXEMPLO)
-    df = pd.read_csv(caminho)
+    if not os.path.isfile(CAMINHO_FADIGA_REAL):
+        return jsonify({"fonte": "vazio", "minuto_pico": None, "registros": []})
 
+    df = pd.read_csv(CAMINHO_FADIGA_REAL)
     minuto_pico = int(df.loc[df["bocejos"].idxmax(), "minuto"]) if not df.empty else None
 
     return jsonify({
-        "fonte": fonte,
+        "fonte": "vazio" if df.empty else "real",
         "minuto_pico": minuto_pico,
         "registros": df.to_dict(orient="records"),
     })
 
 
 def excluir_registro(caminho_real, corpo):
-    """Remove uma linha (por indice) do CSV real e reescreve o arquivo.
-
-    So opera no CSV real (nunca no de exemplo) - excluir dados ficticios
-    nao faz sentido e sujaria um arquivo versionado no git.
-    """
+    """Remove uma linha (por indice) do CSV real e reescreve o arquivo."""
     if not os.path.isfile(caminho_real):
-        return jsonify({"erro": "nao ha dados reais pra excluir (a tela esta mostrando dados de exemplo)"}), 400
+        return jsonify({"erro": "ainda nao ha dados capturados pra excluir"}), 400
 
     indice = corpo.get("indice")
     if not isinstance(indice, int):

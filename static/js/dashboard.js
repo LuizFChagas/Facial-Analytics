@@ -58,6 +58,15 @@ function layoutBase(cores, extra) {
 
 const opcoesPlotly = { displayModeBar: false, responsive: true };
 
+function anotacaoSemDados(cores) {
+  return {
+    text: "Nenhum dado ainda",
+    xref: "paper", yref: "paper", x: 0.5, y: 0.5,
+    showarrow: false,
+    font: { size: 13, color: cores.tintaMuted, family: "system-ui, -apple-system, Segoe UI, sans-serif" },
+  };
+}
+
 // --------------------------- Tiles de KPI ---------------------------
 
 function tileKpi(rotulo, valorHtml, detalhe, classeExtra) {
@@ -77,10 +86,20 @@ function tendenciaHumor(media) {
   return "tendencia neutra";
 }
 
+function tileVazio(mensagem) {
+  const div = document.createElement("div");
+  div.className = "kpi kpi-vazio";
+  div.innerHTML = `<span class="kpi-detalhe">${mensagem}</span>`;
+  return div;
+}
+
 function renderizarKpisHumor(dados) {
   const container = document.getElementById("kpis-humor");
   container.innerHTML = "";
-  if (!dados.length) return;
+  if (!dados.length) {
+    container.append(tileVazio('Nenhuma leitura ainda. Va em "Testar Webcam" e inicie a captura do Humor do Dia.'));
+    return;
+  }
 
   const media = dados.reduce((soma, d) => soma + d.valor_bem_estar, 0) / dados.length;
   const maisPositivo = dados.reduce((a, b) => (b.valor_bem_estar > a.valor_bem_estar ? b : a));
@@ -98,7 +117,10 @@ function renderizarKpisHumor(dados) {
 function renderizarKpisFadiga(dados, minutoPico) {
   const container = document.getElementById("kpis-fadiga");
   container.innerHTML = "";
-  if (!dados.length) return;
+  if (!dados.length) {
+    container.append(tileVazio('Nenhuma leitura ainda. Va em "Testar Webcam" e inicie a captura da Reuniao.'));
+    return;
+  }
 
   const totalPiscadas = dados.reduce((soma, d) => soma + d.piscadas, 0);
   const totalBocejos = dados.reduce((soma, d) => soma + d.bocejos, 0);
@@ -169,6 +191,7 @@ function desenharGraficoHumor(dados) {
       type: "line", x0: 0, x1: 1, xref: "paper", y0: 0, y1: 0,
       line: { color: cores.tintaMuted, width: 1, dash: "dash" },
     }],
+    annotations: dados.length ? [] : [anotacaoSemDados(cores)],
   });
 
   Plotly.newPlot("grafico-humor", [traceArea, traceEmoji], layout, opcoesPlotly);
@@ -182,6 +205,11 @@ function botaoExcluirHtml(modo, indice, fonte) {
 function preencherTabelaHumor(dados, fonte) {
   const corpo = document.querySelector("#tabela-humor tbody");
   corpo.innerHTML = "";
+  if (!dados.length) {
+    corpo.innerHTML = '<tr><td colspan="5" class="linha-vazia">Nenhuma leitura ainda.</td></tr>';
+    document.getElementById("humor-contagem").textContent = "0 leituras";
+    return;
+  }
   dados.forEach((linha, indice) => {
     const tr = document.createElement("tr");
     const hora = linha.timestamp.slice(11, 16);
@@ -225,7 +253,7 @@ async function carregarHumor() {
   dadosHumorCache = payload.registros;
 
   const tagFonte = document.getElementById("humor-fonte");
-  tagFonte.textContent = payload.fonte === "real" ? "dados reais" : "dados de exemplo";
+  tagFonte.textContent = payload.fonte === "real" ? "dados reais" : "sem dados ainda";
 
   renderizarKpisHumor(payload.registros);
   desenharGraficoHumor(payload.registros);
@@ -273,7 +301,20 @@ function desenharGraficosFadiga(dados, minutoPico) {
   }], layoutBase(cores, {
     xaxis: { gridcolor: cores.grade, tickfont: { color: cores.tintaMuted }, dtick: 1 },
     shapes: formas,
+    annotations: dados.length ? [] : [anotacaoSemDados(cores)],
   }), opcoesPlotly);
+
+  const anotacoesBocejos = [];
+  if (minutoPico != null) {
+    anotacoesBocejos.push({
+      x: minutoPico, y: 1, yref: "paper", yshift: 14,
+      text: "⚠ pico de fadiga", showarrow: false,
+      font: { color: cores.critico, size: 12, family: "system-ui, -apple-system, Segoe UI, sans-serif" },
+      bgcolor: hexParaRgba(cores.critico, 0.12),
+      borderpad: 4,
+    });
+  }
+  if (!dados.length) anotacoesBocejos.push(anotacaoSemDados(cores));
 
   Plotly.newPlot("grafico-bocejos", [{
     type: "bar",
@@ -289,19 +330,18 @@ function desenharGraficosFadiga(dados, minutoPico) {
   }], layoutBase(cores, {
     xaxis: { gridcolor: cores.grade, tickfont: { color: cores.tintaMuted }, dtick: 1, title: { text: "Minuto da reuniao" } },
     shapes: formas,
-    annotations: minutoPico != null ? [{
-      x: minutoPico, y: 1, yref: "paper", yshift: 14,
-      text: "⚠ pico de fadiga", showarrow: false,
-      font: { color: cores.critico, size: 12, family: "system-ui, -apple-system, Segoe UI, sans-serif" },
-      bgcolor: hexParaRgba(cores.critico, 0.12),
-      borderpad: 4,
-    }] : [],
+    annotations: anotacoesBocejos,
   }), opcoesPlotly);
 }
 
 function preencherTabelaFadiga(dados, minutoPico, fonte) {
   const corpo = document.querySelector("#tabela-fadiga tbody");
   corpo.innerHTML = "";
+  if (!dados.length) {
+    corpo.innerHTML = '<tr><td colspan="5" class="linha-vazia">Nenhuma leitura ainda.</td></tr>';
+    document.getElementById("fadiga-contagem").textContent = "0 minutos";
+    return;
+  }
   dados.forEach((linha, indice) => {
     const tr = document.createElement("tr");
     if (linha.minuto === minutoPico) tr.classList.add("linha-pico");
@@ -324,7 +364,7 @@ async function carregarFadiga() {
   dadosFadigaCache = payload;
 
   const tagFonte = document.getElementById("fadiga-fonte");
-  tagFonte.textContent = payload.fonte === "real" ? "dados reais" : "dados de exemplo";
+  tagFonte.textContent = payload.fonte === "real" ? "dados reais" : "sem dados ainda";
 
   const tagPico = document.getElementById("fadiga-pico");
   tagPico.textContent = payload.minuto_pico != null ? `pico no minuto ${payload.minuto_pico}` : "sem dados";
