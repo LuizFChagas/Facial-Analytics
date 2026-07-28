@@ -301,6 +301,16 @@ tbody tr.linha-pico td { color: var(--accent-critical); font-weight: 600; }
 }
 .webcam-aviso.is-hidden { display: none; }
 
+#canvas-captura.is-hidden { display: none; }
+
+.webcam-expressao {
+  margin: 12px 0 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+.webcam-expressao.is-hidden { display: none; }
+
 .captura-controles {
   display: flex;
   flex-wrap: wrap;

@@ -15,11 +15,14 @@ Uso:
     (abre em http://127.0.0.1:5000)
 """
 
+import json
 import os
 import signal
 import subprocess
 import sys
 import threading
+import urllib.error
+import urllib.request
 
 import pandas as pd
 from flask import Flask, jsonify, render_template, request
@@ -42,6 +45,36 @@ CAMINHO_PYTHON_FADIGA = sys.executable
 # sentido ter uma instancia de cada rodando por vez.
 processos_captura = {"humor": None, "fadiga": None}
 trava_processos = threading.Lock()
+
+# Servico auxiliar (humor_servico.py) que roda o classificador FER no
+# Python 3.11, pra pre-visualizacao da webcam poder mostrar a expressao
+# detectada ao vivo. Sobe sob demanda (na primeira vez que a aba de
+# pre-visualizacao pede uma classificacao) porque carregar o modelo
+# demora alguns segundos.
+URL_SERVICO_HUMOR = "http://127.0.0.1:5051"
+processo_servico_humor = None
+trava_servico_humor = threading.Lock()
+
+
+def servico_humor_esta_de_pe():
+    try:
+        with urllib.request.urlopen(f"{URL_SERVICO_HUMOR}/saude", timeout=0.5) as resposta:
+            return json.loads(resposta.read()).get("modelo_carregado", False)
+    except (urllib.error.URLError, TimeoutError, ConnectionError):
+        return False
+
+
+def garantir_servico_humor_iniciado():
+    global processo_servico_humor
+    with trava_servico_humor:
+        if processo_servico_humor is not None and processo_servico_humor.poll() is None:
+            return
+        opcoes = {}
+        if os.name == "nt":
+            opcoes["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        processo_servico_humor = subprocess.Popen(
+            [CAMINHO_PYTHON_HUMOR, "humor_servico.py"], **opcoes
+        )
 
 CAMINHO_HUMOR_REAL = os.path.join("data", "humor_do_dia.csv")
 CAMINHO_FADIGA_REAL = os.path.join("data", "reuniao_fadiga.csv")
@@ -121,6 +154,29 @@ def api_humor_excluir():
 @app.route("/api/fadiga/excluir", methods=["POST"])
 def api_fadiga_excluir():
     return excluir_registro(CAMINHO_FADIGA_REAL, request.get_json(silent=True) or {})
+
+
+@app.route("/api/webcam/classificar", methods=["POST"])
+def api_webcam_classificar():
+    if not servico_humor_esta_de_pe():
+        garantir_servico_humor_iniciado()
+        return jsonify({"status": "carregando"})
+
+    corpo = request.get_data()
+    requisicao = urllib.request.Request(
+        f"{URL_SERVICO_HUMOR}/classificar",
+        data=corpo,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(requisicao, timeout=10) as resposta:
+            payload = json.loads(resposta.read())
+    except (urllib.error.URLError, TimeoutError, ConnectionError):
+        return jsonify({"status": "carregando"})
+
+    payload["status"] = "ok"
+    return jsonify(payload)
 
 
 def processo_esta_rodando(modo):
