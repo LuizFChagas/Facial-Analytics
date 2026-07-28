@@ -1,6 +1,16 @@
 opencv-python>=4.9.0
 mediapipe>=0.10.9
-fer>=22.5.1
+# fixado abaixo de 23: a partir da serie 25.x a lib "fer" foi reescrita
+# (troca mtcnn+tensorflow por facenet-pytorch) e a API mudou - o codigo
+# deste projeto usa a API classica "from fer import FER".
+fer>=22.5.1,<23
+# dependencia transitiva do fer (so usada por uma classe de video que nao
+# usamos aqui); moviepy 2.x removeu o submodulo "moviepy.editor" que o
+# fer classico ainda importa, entao fixamos a serie 1.x.
+moviepy<2
+# o fer classico ainda importa "pkg_resources"; a partir do setuptools 81
+# esse modulo foi removido, entao fixamos abaixo disso.
+setuptools<81
 pandas>=2.2.0
 matplotlib>=3.8.0
 numpy>=1.26.0

@@ -174,10 +174,15 @@ function desenharGraficoHumor(dados) {
   Plotly.newPlot("grafico-humor", [traceArea, traceEmoji], layout, opcoesPlotly);
 }
 
-function preencherTabelaHumor(dados) {
+function botaoExcluirHtml(modo, indice, fonte) {
+  if (fonte !== "real") return "<td></td>";
+  return `<td class="col-acao"><button class="btn-excluir" data-modo="${modo}" data-indice="${indice}" title="Excluir esta leitura">🗑</button></td>`;
+}
+
+function preencherTabelaHumor(dados, fonte) {
   const corpo = document.querySelector("#tabela-humor tbody");
   corpo.innerHTML = "";
-  dados.forEach((linha) => {
+  dados.forEach((linha, indice) => {
     const tr = document.createElement("tr");
     const hora = linha.timestamp.slice(11, 16);
     tr.innerHTML = `
@@ -185,11 +190,34 @@ function preencherTabelaHumor(dados) {
       <td><span class="emoji-pill">${EMOJI_EXPRESSAO[linha.expressao] || ""} ${linha.expressao}</span></td>
       <td class="num">${(linha.confianca * 100).toFixed(0)}%</td>
       <td class="num">${linha.valor_bem_estar > 0 ? "+" : ""}${linha.valor_bem_estar}</td>
+      ${botaoExcluirHtml("humor", indice, fonte)}
     `;
     corpo.appendChild(tr);
   });
   document.getElementById("humor-contagem").textContent = `${dados.length} leituras`;
 }
+
+async function excluirLinha(modo, indice) {
+  if (!confirm("Excluir essa leitura? Isso remove a linha do CSV e nao da pra desfazer.")) return;
+  const resposta = await fetch(`/api/${modo}/excluir`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ indice }),
+  });
+  if (!resposta.ok) {
+    const erro = await resposta.json().catch(() => ({}));
+    alert(erro.erro || "Nao foi possivel excluir essa leitura.");
+    return;
+  }
+  if (modo === "humor") carregarHumor();
+  else carregarFadiga();
+}
+
+document.addEventListener("click", (evento) => {
+  const botao = evento.target.closest(".btn-excluir");
+  if (!botao) return;
+  excluirLinha(botao.dataset.modo, Number(botao.dataset.indice));
+});
 
 async function carregarHumor() {
   const resposta = await fetch("/api/humor");
@@ -201,7 +229,7 @@ async function carregarHumor() {
 
   renderizarKpisHumor(payload.registros);
   desenharGraficoHumor(payload.registros);
-  preencherTabelaHumor(payload.registros);
+  preencherTabelaHumor(payload.registros, payload.fonte);
 }
 
 // --------------------------- Modo 2: Reuniao (Fadiga) ---------------------------
@@ -271,10 +299,10 @@ function desenharGraficosFadiga(dados, minutoPico) {
   }), opcoesPlotly);
 }
 
-function preencherTabelaFadiga(dados, minutoPico) {
+function preencherTabelaFadiga(dados, minutoPico, fonte) {
   const corpo = document.querySelector("#tabela-fadiga tbody");
   corpo.innerHTML = "";
-  dados.forEach((linha) => {
+  dados.forEach((linha, indice) => {
     const tr = document.createElement("tr");
     if (linha.minuto === minutoPico) tr.classList.add("linha-pico");
     const hora = String(linha.timestamp).slice(11, 16);
@@ -283,6 +311,7 @@ function preencherTabelaFadiga(dados, minutoPico) {
       <td>${hora}</td>
       <td class="num">${linha.piscadas}</td>
       <td class="num">${linha.bocejos}</td>
+      ${botaoExcluirHtml("fadiga", indice, fonte)}
     `;
     corpo.appendChild(tr);
   });
@@ -302,8 +331,100 @@ async function carregarFadiga() {
 
   renderizarKpisFadiga(payload.registros, payload.minuto_pico);
   desenharGraficosFadiga(payload.registros, payload.minuto_pico);
-  preencherTabelaFadiga(payload.registros, payload.minuto_pico);
+  preencherTabelaFadiga(payload.registros, payload.minuto_pico, payload.fonte);
 }
+
+// --------------------------- Testar Webcam ---------------------------
+
+let streamCamera = null;
+
+async function ligarPreviewCamera() {
+  const aviso = document.getElementById("webcam-aviso");
+  aviso.classList.add("is-hidden");
+  aviso.textContent = "";
+
+  try {
+    streamCamera = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    document.getElementById("video-preview").srcObject = streamCamera;
+    document.getElementById("webcam-status").textContent = "ligada";
+    document.getElementById("btn-ligar-camera").disabled = true;
+    document.getElementById("btn-desligar-camera").disabled = false;
+  } catch (erro) {
+    aviso.textContent = `Nao foi possivel acessar a camera: ${erro.message}. Verifique se ela nao esta em uso por outro programa (ou pela captura Python abaixo) e se o navegador tem permissao.`;
+    aviso.classList.remove("is-hidden");
+  }
+}
+
+function desligarPreviewCamera() {
+  if (streamCamera) {
+    streamCamera.getTracks().forEach((faixa) => faixa.stop());
+    streamCamera = null;
+  }
+  document.getElementById("video-preview").srcObject = null;
+  document.getElementById("webcam-status").textContent = "desligada";
+  document.getElementById("btn-ligar-camera").disabled = false;
+  document.getElementById("btn-desligar-camera").disabled = true;
+}
+
+document.getElementById("btn-ligar-camera").addEventListener("click", ligarPreviewCamera);
+document.getElementById("btn-desligar-camera").addEventListener("click", desligarPreviewCamera);
+window.addEventListener("beforeunload", desligarPreviewCamera);
+
+// --- Controle dos processos de captura (humor_do_dia.py / reuniao_fadiga.py) ---
+
+const BOTOES_CAPTURA = {
+  humor: { iniciar: "btn-iniciar-humor", parar: "btn-parar-humor", status: "status-humor-captura" },
+  fadiga: { iniciar: "btn-iniciar-fadiga", parar: "btn-parar-fadiga", status: "status-fadiga-captura" },
+};
+
+function aplicarStatusCaptura(modo, rodando) {
+  const refs = BOTOES_CAPTURA[modo];
+  const tagStatus = document.getElementById(refs.status);
+  tagStatus.textContent = rodando ? "rodando" : "parado";
+  tagStatus.classList.toggle("tag-rodando", rodando);
+  document.getElementById(refs.iniciar).disabled = rodando;
+  document.getElementById(refs.parar).disabled = !rodando;
+}
+
+async function atualizarStatusCaptura() {
+  try {
+    const resposta = await fetch("/api/captura/status");
+    const status = await resposta.json();
+    aplicarStatusCaptura("humor", status.humor === "rodando");
+    aplicarStatusCaptura("fadiga", status.fadiga === "rodando");
+  } catch (erro) {
+    // dashboard offline momentaneamente - tenta de novo no proximo ciclo
+  }
+}
+
+async function iniciarCaptura(modo, corpoExtra) {
+  await fetch("/api/captura/iniciar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ modo, ...corpoExtra }),
+  });
+  atualizarStatusCaptura();
+}
+
+async function pararCaptura(modo) {
+  await fetch("/api/captura/parar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ modo }),
+  });
+  atualizarStatusCaptura();
+}
+
+document.getElementById("btn-iniciar-humor").addEventListener("click", () => {
+  const intervalo = Number(document.getElementById("input-intervalo-humor").value) || 15;
+  iniciarCaptura("humor", { intervalo });
+});
+document.getElementById("btn-parar-humor").addEventListener("click", () => pararCaptura("humor"));
+document.getElementById("btn-iniciar-fadiga").addEventListener("click", () => iniciarCaptura("fadiga"));
+document.getElementById("btn-parar-fadiga").addEventListener("click", () => pararCaptura("fadiga"));
+
+atualizarStatusCaptura();
+setInterval(atualizarStatusCaptura, 4000);
 
 // --------------------------- Abas e tema ---------------------------
 
@@ -331,9 +452,9 @@ document.querySelectorAll(".tab-btn").forEach((botao) => {
   });
 });
 
-// Permite abrir direto numa aba especifica via #humor / #fadiga (link compartilhavel)
+// Permite abrir direto numa aba especifica via #humor / #fadiga / #webcam (link compartilhavel)
 const abaInicial = window.location.hash.replace("#", "");
-if (abaInicial === "fadiga") ativarAba("fadiga");
+if (abaInicial === "fadiga" || abaInicial === "webcam") ativarAba(abaInicial);
 
 // Redesenha os graficos quando o tema do SO muda (light/dark), ja que as
 // cores do Plotly sao fixadas no momento do desenho, nao acompanham CSS sozinhas.
