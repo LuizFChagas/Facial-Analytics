@@ -124,7 +124,15 @@ function renderizarKpisHumor(dados) {
   );
 }
 
-function renderizarKpisFadiga(dados, minutoPico) {
+function indiceDoPicoDeBocejos(dados) {
+  // Acha o pico pelo maior valor de bocejos (posicao real na lista), nao
+  // pelo "minuto" - esse numero recomeca em 1 a cada sessao/reuniao e
+  // pode se repetir se houver mais de uma no mesmo CSV.
+  if (!dados.length) return null;
+  return dados.reduce((melhor, d, i) => (d.bocejos > dados[melhor].bocejos ? i : melhor), 0);
+}
+
+function renderizarKpisFadiga(dados) {
   const container = document.getElementById("kpis-fadiga");
   container.innerHTML = "";
   if (!dados.length) {
@@ -135,7 +143,8 @@ function renderizarKpisFadiga(dados, minutoPico) {
   const totalPiscadas = dados.reduce((soma, d) => soma + d.piscadas, 0);
   const totalBocejos = dados.reduce((soma, d) => soma + d.bocejos, 0);
   const mediaPiscadas = totalPiscadas / dados.length;
-  const registroPico = dados.find((d) => d.minuto === minutoPico);
+  const indicePico = indiceDoPicoDeBocejos(dados);
+  const registroPico = indicePico != null ? dados[indicePico] : null;
 
   container.append(
     tileKpi("Total piscadas", String(totalPiscadas)),
@@ -143,8 +152,8 @@ function renderizarKpisFadiga(dados, minutoPico) {
     tileKpi("Piscadas / min", mediaPiscadas.toFixed(1)),
     tileKpi(
       "Pico de fadiga",
-      minutoPico != null ? `min ${minutoPico}` : "—",
-      registroPico ? `${registroPico.bocejos} bocejos nesse minuto` : "",
+      registroPico ? `min ${registroPico.minuto}` : "—",
+      registroPico ? `${registroPico.bocejos} bocejos nesse minuto (${registroPico.timestamp.slice(11, 16)})` : "",
       "kpi-critico",
     ),
   );
@@ -154,14 +163,46 @@ function renderizarKpisFadiga(dados, minutoPico) {
 
 let dadosHumorCache = null;
 
+function construirSerieComQuebras(dados, limiteGapMinutos) {
+  // Insere um ponto nulo entre leituras separadas por um gap grande (ex:
+  // virada do dia sem captura), pra Plotly quebrar a linha em vez de
+  // desenhar uma diagonal atravessando um periodo sem dado nenhum.
+  const x = [];
+  const y = [];
+  const customdata = [];
+  const yEmoji = [];
+  const textoEmoji = [];
+
+  dados.forEach((d, i) => {
+    if (i > 0) {
+      const gapMinutos = (new Date(d.timestamp) - new Date(dados[i - 1].timestamp)) / 60000;
+      if (gapMinutos > limiteGapMinutos) {
+        x.push(null);
+        y.push(null);
+        customdata.push([null, null]);
+        yEmoji.push(null);
+        textoEmoji.push("");
+      }
+    }
+    x.push(d.timestamp);
+    y.push(d.valor_bem_estar);
+    customdata.push([d.expressao, d.confianca]);
+    yEmoji.push(d.valor_bem_estar + 0.55);
+    textoEmoji.push(EMOJI_EXPRESSAO[d.expressao] || "");
+  });
+
+  return { x, y, customdata, yEmoji, textoEmoji };
+}
+
 function desenharGraficoHumor(dados) {
   const cores = temasDoGrafico();
+  const serie = construirSerieComQuebras(dados, 90);
 
   const traceArea = {
     type: "scatter",
     mode: "lines+markers",
-    x: dados.map((d) => d.timestamp),
-    y: dados.map((d) => d.valor_bem_estar),
+    x: serie.x,
+    y: serie.y,
     line: { color: cores.piscadas, width: 2.5, shape: "spline", smoothing: 0.4 },
     marker: { size: 7, color: cores.piscadas, line: { color: cores.tintaPrimaria === "#ffffff" ? "#1a1a19" : "#fcfcfb", width: 1.5 } },
     fill: "tozeroy",
@@ -170,7 +211,7 @@ function desenharGraficoHumor(dados) {
       type: "vertical",
       colorscale: [[0, hexParaRgba(cores.piscadas, 0.02)], [1, hexParaRgba(cores.piscadas, 0.30)]],
     },
-    customdata: dados.map((d) => [d.expressao, d.confianca]),
+    customdata: serie.customdata,
     hovertemplate:
       "%{x|%H:%M}<br>" +
       "expressao: <b>%{customdata[0]}</b><br>" +
@@ -184,9 +225,9 @@ function desenharGraficoHumor(dados) {
   const traceEmoji = {
     type: "scatter",
     mode: "text",
-    x: dados.map((d) => d.timestamp),
-    y: dados.map((d) => d.valor_bem_estar + 0.55),
-    text: dados.map((d) => EMOJI_EXPRESSAO[d.expressao] || ""),
+    x: serie.x,
+    y: serie.yEmoji,
+    text: serie.textoEmoji,
     textfont: { size: 18 },
     hoverinfo: "skip",
     showlegend: false,
@@ -292,32 +333,74 @@ function linhaPico(minutoPico, cores) {
   };
 }
 
-function desenharGraficosFadiga(dados, minutoPico) {
+function construirPosicoesSequenciais(dados, limiteGapMinutos) {
+  // O "minuto" de cada reuniao recomeca em 1 - se houver mais de uma
+  // sessao no mesmo CSV, os minutos colidem (duas reunioes teriam ambas
+  // um minuto 1, 2, 3...). Por isso o eixo X usa uma posicao sequencial
+  // propria, nao o minuto cru; um gap grande de horario abre um espaco
+  // visual pra marcar "comecou uma sessao nova".
+  const posicoes = [];
+  let pos = 0;
+  dados.forEach((d, i) => {
+    if (i > 0) {
+      const gapMinutos = (new Date(d.timestamp) - new Date(dados[i - 1].timestamp)) / 60000;
+      if (gapMinutos > limiteGapMinutos) pos += 2;
+    }
+    pos += 1;
+    posicoes.push(pos);
+  });
+  return posicoes;
+}
+
+function divisoresDeSessao(dados, posicoes, cores) {
+  const divisores = [];
+  for (let i = 1; i < dados.length; i++) {
+    if (posicoes[i] - posicoes[i - 1] > 1) {
+      divisores.push({
+        type: "line", xref: "x", x0: (posicoes[i - 1] + posicoes[i]) / 2, x1: (posicoes[i - 1] + posicoes[i]) / 2,
+        yref: "paper", y0: 0, y1: 1,
+        line: { color: cores.grade, width: 1, dash: "dot" },
+      });
+    }
+  }
+  return divisores;
+}
+
+function desenharGraficosFadiga(dados) {
   const cores = temasDoGrafico();
-  const minutos = dados.map((d) => d.minuto);
-  const formas = minutoPico != null ? [faixaDestaquePico(minutoPico, cores), linhaPico(minutoPico, cores)] : [];
+  const posicoes = construirPosicoesSequenciais(dados, 90);
+  const customdata = dados.map((d) => [d.minuto]);
+
+  const indicePico = indiceDoPicoDeBocejos(dados);
+  const posicaoPico = indicePico != null ? posicoes[indicePico] : null;
+
+  const formas = [
+    ...divisoresDeSessao(dados, posicoes, cores),
+    ...(posicaoPico != null ? [faixaDestaquePico(posicaoPico, cores), linhaPico(posicaoPico, cores)] : []),
+  ];
 
   Plotly.newPlot("grafico-piscadas", [{
     type: "bar",
-    x: minutos,
+    x: posicoes,
     y: dados.map((d) => d.piscadas),
+    customdata,
     marker: {
       color: dados.map((d) => d.piscadas),
       colorscale: [[0, hexParaRgba(cores.piscadas, 0.35)], [1, cores.piscadas]],
       cornerradius: 6,
       line: { width: 0 },
     },
-    hovertemplate: "minuto %{x}<br>%{y} piscadas<extra></extra>",
+    hovertemplate: "minuto %{customdata[0]}<br>%{y} piscadas<extra></extra>",
   }], layoutBase(cores, {
-    xaxis: { gridcolor: cores.grade, tickfont: { color: cores.tintaMuted }, dtick: 1 },
+    xaxis: { gridcolor: cores.grade, tickfont: { color: cores.tintaMuted }, showticklabels: false },
     shapes: formas,
     annotations: dados.length ? [] : [anotacaoSemDados(cores)],
   }), opcoesPlotly);
 
   const anotacoesBocejos = [];
-  if (minutoPico != null) {
+  if (posicaoPico != null) {
     anotacoesBocejos.push({
-      x: minutoPico, y: 1, yref: "paper", yshift: 14,
+      x: posicaoPico, y: 1, yref: "paper", yshift: 14,
       text: "⚠ pico de fadiga", showarrow: false,
       font: { color: cores.critico, size: 12, family: "system-ui, -apple-system, Segoe UI, sans-serif" },
       bgcolor: hexParaRgba(cores.critico, 0.12),
@@ -328,23 +411,24 @@ function desenharGraficosFadiga(dados, minutoPico) {
 
   Plotly.newPlot("grafico-bocejos", [{
     type: "bar",
-    x: minutos,
+    x: posicoes,
     y: dados.map((d) => d.bocejos),
+    customdata,
     marker: {
       color: dados.map((d) => d.bocejos),
       colorscale: [[0, hexParaRgba(cores.bocejos, 0.35)], [1, cores.bocejos]],
       cornerradius: 6,
       line: { width: 0 },
     },
-    hovertemplate: "minuto %{x}<br>%{y} bocejos<extra></extra>",
+    hovertemplate: "minuto %{customdata[0]}<br>%{y} bocejos<extra></extra>",
   }], layoutBase(cores, {
-    xaxis: { gridcolor: cores.grade, tickfont: { color: cores.tintaMuted }, dtick: 1, title: { text: "Minuto da reuniao" } },
+    xaxis: { gridcolor: cores.grade, tickfont: { color: cores.tintaMuted }, showticklabels: false, title: { text: "Minuto da reuniao (passe o mouse pra ver o valor exato)" } },
     shapes: formas,
     annotations: anotacoesBocejos,
   }), opcoesPlotly);
 }
 
-function preencherTabelaFadiga(dados, minutoPico, fonte) {
+function preencherTabelaFadiga(dados, fonte) {
   const corpo = document.querySelector("#tabela-fadiga tbody");
   corpo.innerHTML = "";
   if (!dados.length) {
@@ -352,9 +436,10 @@ function preencherTabelaFadiga(dados, minutoPico, fonte) {
     document.getElementById("fadiga-contagem").textContent = "0 minutos";
     return;
   }
+  const indicePico = indiceDoPicoDeBocejos(dados);
   dados.forEach((linha, indice) => {
     const tr = document.createElement("tr");
-    if (linha.minuto === minutoPico) tr.classList.add("linha-pico");
+    if (indice === indicePico) tr.classList.add("linha-pico");
     const hora = String(linha.timestamp).slice(11, 16);
     tr.innerHTML = `
       <td class="num">${linha.minuto}</td>
@@ -376,12 +461,13 @@ async function carregarFadiga() {
   const tagFonte = document.getElementById("fadiga-fonte");
   tagFonte.textContent = payload.fonte === "real" ? "dados reais" : "sem dados ainda";
 
+  const indicePico = indiceDoPicoDeBocejos(payload.registros);
   const tagPico = document.getElementById("fadiga-pico");
-  tagPico.textContent = payload.minuto_pico != null ? `pico no minuto ${payload.minuto_pico}` : "sem dados";
+  tagPico.textContent = indicePico != null ? `pico no minuto ${payload.registros[indicePico].minuto}` : "sem dados";
 
-  renderizarKpisFadiga(payload.registros, payload.minuto_pico);
-  desenharGraficosFadiga(payload.registros, payload.minuto_pico);
-  preencherTabelaFadiga(payload.registros, payload.minuto_pico, payload.fonte);
+  renderizarKpisFadiga(payload.registros);
+  desenharGraficosFadiga(payload.registros);
+  preencherTabelaFadiga(payload.registros, payload.fonte);
 }
 
 // --------------------------- Testar Webcam ---------------------------
@@ -584,7 +670,7 @@ if (abaInicial === "fadiga" || abaInicial === "webcam") ativarAba(abaInicial);
 // cores do Plotly sao fixadas no momento do desenho, nao acompanham CSS sozinhas.
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
   if (dadosHumorCache) desenharGraficoHumor(dadosHumorCache);
-  if (dadosFadigaCache) desenharGraficosFadiga(dadosFadigaCache.registros, dadosFadigaCache.minuto_pico);
+  if (dadosFadigaCache) desenharGraficosFadiga(dadosFadigaCache.registros);
 });
 
 carregarHumor();
