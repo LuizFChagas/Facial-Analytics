@@ -12,16 +12,6 @@ const EMOJI_EXPRESSAO = {
   disgust: "🤢",
 };
 
-const LABEL_EXPRESSAO_PT = {
-  happy: "Feliz",
-  neutral: "Neutro",
-  sad: "Triste",
-  surprise: "Surpreso",
-  angry: "Bravo",
-  fear: "Medo",
-  disgust: "Nojo",
-};
-
 function token(nome) {
   return getComputedStyle(document.documentElement).getPropertyValue(nome).trim();
 }
@@ -387,10 +377,6 @@ async function carregarFadiga() {
 // --------------------------- Testar Webcam ---------------------------
 
 let streamCamera = null;
-let cicloClassificacao = null;
-let classificandoAgora = false;
-let cicloMalha = null;
-let desenhandoMalhaAgora = false;
 
 async function ligarPreviewCamera() {
   const aviso = document.getElementById("webcam-aviso");
@@ -403,8 +389,6 @@ async function ligarPreviewCamera() {
     document.getElementById("webcam-status").textContent = "ligada";
     document.getElementById("btn-ligar-camera").disabled = true;
     document.getElementById("btn-desligar-camera").disabled = false;
-    iniciarClassificacaoAoVivo();
-    iniciarMalhaAoVivo();
   } catch (erro) {
     aviso.textContent = `Nao foi possivel acessar a camera: ${erro.message}. Verifique se ela nao esta em uso por outro programa (ou pela captura Python abaixo) e se o navegador tem permissao.`;
     aviso.classList.remove("is-hidden");
@@ -420,132 +404,11 @@ function desligarPreviewCamera() {
   document.getElementById("webcam-status").textContent = "desligada";
   document.getElementById("btn-ligar-camera").disabled = false;
   document.getElementById("btn-desligar-camera").disabled = true;
-  pararClassificacaoAoVivo();
-  pararMalhaAoVivo();
 }
 
 document.getElementById("btn-ligar-camera").addEventListener("click", ligarPreviewCamera);
 document.getElementById("btn-desligar-camera").addEventListener("click", desligarPreviewCamera);
 window.addEventListener("beforeunload", desligarPreviewCamera);
-
-// --- Classificacao de expressao ao vivo na pre-visualizacao ---
-//
-// O navegador captura um frame do <video> a cada poucos segundos, manda
-// pro dashboard, que repassa pro servico Python (humor_servico.py, que
-// roda o mesmo FER do Modo 1) e mostra o resultado como texto. Nao e
-// video continuo (o classificador e pesado demais pra 30fps) - e uma
-// foto periodica, no mesmo espirito do humor_do_dia.py.
-
-function capturarFrameComoJpegBase64() {
-  const video = document.getElementById("video-preview");
-  const canvas = document.getElementById("canvas-captura");
-  if (!video.videoWidth) return null;
-
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  canvas.getContext("2d").drawImage(video, 0, 0);
-  return canvas.toDataURL("image/jpeg", 0.8);
-}
-
-function mostrarExpressao(texto) {
-  const elemento = document.getElementById("webcam-expressao");
-  elemento.textContent = texto;
-  elemento.classList.remove("is-hidden");
-}
-
-async function classificarFrameAtual() {
-  if (classificandoAgora) return; // nao empilha requisicoes se uma anterior ainda nao voltou
-  const imagem = capturarFrameComoJpegBase64();
-  if (!imagem) return;
-
-  classificandoAgora = true;
-  try {
-    const resposta = await fetch("/api/webcam/classificar", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imagem }),
-    });
-    const payload = await resposta.json();
-
-    if (payload.status === "carregando") {
-      mostrarExpressao("Carregando modelo de classificacao... (so na primeira vez, leva uns 10-20s)");
-    } else if (payload.expressao) {
-      const emoji = EMOJI_EXPRESSAO[payload.expressao] || "";
-      const rotulo = LABEL_EXPRESSAO_PT[payload.expressao] || payload.expressao;
-      const confianca = payload.confianca != null ? ` (${(payload.confianca * 100).toFixed(0)}%)` : "";
-      mostrarExpressao(`${emoji} ${rotulo}${confianca}`);
-    } else {
-      mostrarExpressao("Nenhum rosto detectado");
-    }
-  } catch (erro) {
-    mostrarExpressao("Nao foi possivel classificar agora.");
-  } finally {
-    classificandoAgora = false;
-  }
-}
-
-function iniciarClassificacaoAoVivo() {
-  mostrarExpressao("Analisando...");
-  classificarFrameAtual();
-  cicloClassificacao = setInterval(classificarFrameAtual, 2000);
-}
-
-function pararClassificacaoAoVivo() {
-  if (cicloClassificacao) {
-    clearInterval(cicloClassificacao);
-    cicloClassificacao = null;
-  }
-  document.getElementById("webcam-expressao").classList.add("is-hidden");
-}
-
-// --- Malha facial ao vivo na pre-visualizacao ---
-//
-// Mesma ideia da janela do reuniao_fadiga.py (contorno do rosto, olhos,
-// sobrancelhas e boca desenhados via MediaPipe), so que aqui o desenho
-// acontece no servidor a cada frame e volta como uma foto anotada, que
-// fica sobreposta ao video. Atualiza a cada ~400ms - nao e um video
-// continuo, e uma sequencia rapida de fotos.
-
-async function desenharMalhaFrameAtual() {
-  if (desenhandoMalhaAgora) return;
-  const imagem = capturarFrameComoJpegBase64();
-  if (!imagem) return;
-
-  desenhandoMalhaAgora = true;
-  try {
-    const resposta = await fetch("/api/webcam/malha", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imagem }),
-    });
-    const payload = await resposta.json();
-    const overlay = document.getElementById("overlay-malha");
-
-    if (payload.rosto_detectado && payload.imagem) {
-      overlay.src = payload.imagem;
-      overlay.classList.remove("is-hidden");
-    } else {
-      overlay.classList.add("is-hidden");
-    }
-  } catch (erro) {
-    document.getElementById("overlay-malha").classList.add("is-hidden");
-  } finally {
-    desenhandoMalhaAgora = false;
-  }
-}
-
-function iniciarMalhaAoVivo() {
-  desenharMalhaFrameAtual();
-  cicloMalha = setInterval(desenharMalhaFrameAtual, 400);
-}
-
-function pararMalhaAoVivo() {
-  if (cicloMalha) {
-    clearInterval(cicloMalha);
-    cicloMalha = null;
-  }
-  document.getElementById("overlay-malha").classList.add("is-hidden");
-}
 
 // --- Controle dos processos de captura (humor_do_dia.py / reuniao_fadiga.py) ---
 

@@ -285,16 +285,6 @@ tbody tr.linha-pico td { color: var(--accent-critical); font-weight: 600; }
   display: block;
   transform: scaleX(-1); /* espelha, como um espelho normal */
 }
-#overlay-malha {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transform: scaleX(-1); /* mesmo espelhamento do video, pra alinhar com o que aparece por baixo */
-}
-#overlay-malha.is-hidden { display: none; }
-
 .webcam-aviso {
   position: absolute;
   inset: 0;
@@ -310,16 +300,6 @@ tbody tr.linha-pico td { color: var(--accent-critical); font-weight: 600; }
   line-height: 1.5;
 }
 .webcam-aviso.is-hidden { display: none; }
-
-#canvas-captura.is-hidden { display: none; }
-
-.webcam-expressao {
-  margin: 12px 0 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--ink-primary);
-}
-.webcam-expressao.is-hidden { display: none; }
 
 .captura-controles {
   display: flex;
