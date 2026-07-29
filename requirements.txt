@@ -14,4 +14,7 @@ setuptools<81
 pandas>=2.2.0
 matplotlib>=3.8.0
 numpy>=1.26.0
+# tambem precisa estar instalado no venv Python 3.11 (.venv-py311), pois
+# humor_servico.py (chamado pelo dashboard pra classificar a webcam ao
+# vivo) roda nesse venv e tambem expoe uma rota Flask.
 flask>=3.0.0

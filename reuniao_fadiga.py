@@ -237,7 +237,7 @@ def executar():
             for indice, texto in enumerate(linhas_overlay):
                 cv2.putText(
                     frame, texto, (10, 25 + indice * 22),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA,
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2, cv2.LINE_AA,
                 )
 
             cv2.imshow("Reuniao - Deteccao de Fadiga (q para sair)", frame)
