@@ -29,10 +29,7 @@ from datetime import datetime
 import cv2
 from fer import FER
 
-# Caminho do CSV onde cada leitura de humor e acumulada ao longo do dia
 CAMINHO_CSV = os.path.join("data", "humor_do_dia.csv")
-
-# Cabecalho do CSV: uma linha por snapshot
 CABECALHO_CSV = ["timestamp", "expressao", "confianca"]
 
 
@@ -83,8 +80,6 @@ def classificar_expressao(detector, frame):
     # Pega o primeiro rosto detectado (cenario tipico: uma pessoa por vez
     # em frente ao notebook durante o expediente)
     emocoes = resultados[0]["emotions"]
-
-    # A expressao "dominante" e a de maior score entre as 7 categorias
     expressao_dominante = max(emocoes, key=emocoes.get)
     confianca = emocoes[expressao_dominante]
     return expressao_dominante, confianca
@@ -102,7 +97,6 @@ def registrar_leitura(expressao, confianca):
 def executar(intervalo_minutos):
     garantir_csv()
 
-    # mtcnn=True: usa o detector de rosto MTCNN em vez do Haar Cascade padrao
     detector = FER(mtcnn=True)
 
     print(f"Humor do Dia iniciado. Snapshot a cada {intervalo_minutos} min.")

@@ -33,13 +33,13 @@ ESCALA_BEM_ESTAR = {
 
 # Paleta (mesma logica de tokens usada nos demais graficos do projeto)
 COR_SUPERFICIE = "#fcfcfb"
-COR_LINHA = "#2a78d6"       # azul - serie principal (unica serie, sem legenda)
-COR_GRADE = "#e1e0d9"       # gridline hairline
-COR_EIXO = "#c3c2b7"        # baseline/eixo
+COR_LINHA = "#2a78d6"
+COR_GRADE = "#e1e0d9"
+COR_EIXO = "#c3c2b7"
 COR_TEXTO_PRIMARIO = "#0b0b0b"
 COR_TEXTO_SECUNDARIO = "#52514e"
 COR_TEXTO_MUTED = "#898781"
-COR_REFERENCIA = "#898781"  # linha tracejada em "neutro" (0)
+COR_REFERENCIA = "#898781"
 
 
 def carregar_dados():
@@ -62,7 +62,6 @@ def gerar_grafico(df):
         solid_capstyle="round",
     )
 
-    # Linha de referencia no "neutro" (0), pra dar contexto visual imediato
     ax.axhline(0, color=COR_REFERENCIA, linewidth=1, linestyle="--", zorder=0)
 
     # Rotula diretamente o pico mais positivo e o mais negativo do dia

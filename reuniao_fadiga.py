@@ -141,12 +141,10 @@ def executar():
 
     landmarker = criar_landmarker()
 
-    # Estado dos contadores "por evento" (piscada/bocejo)
     frames_olho_fechado = 0
     frames_boca_aberta = 0
     bocejo_ja_contado_neste_ciclo = False
 
-    # Contadores do minuto corrente e acumulados da sessao
     piscadas_no_minuto = 0
     bocejos_no_minuto = 0
     piscadas_totais = 0
@@ -226,7 +224,6 @@ def executar():
                 bocejos_no_minuto = 0
                 minuto_atual = minuto_decorrido
 
-            # --- Overlay com os contadores em tempo real ---
             linhas_overlay = [
                 f"EAR: {ear_medio:.2f}" if ear_medio is not None else "EAR: --",
                 f"MAR: {mar:.2f}" if mar is not None else "MAR: --",

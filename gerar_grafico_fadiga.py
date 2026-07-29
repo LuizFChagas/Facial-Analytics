@@ -25,9 +25,9 @@ CAMINHO_CSV = os.path.join("data", "reuniao_fadiga.csv")
 CAMINHO_SAIDA = os.path.join("graficos", "reuniao_fadiga.png")
 
 COR_SUPERFICIE = "#fcfcfb"
-COR_PISCADAS = "#2a78d6"     # azul - slot categorico 1
-COR_BOCEJOS = "#eb6834"      # laranja - slot categorico 2
-COR_PICO = "#d03b3b"         # vermelho - status "critical", reservado pro destaque
+COR_PISCADAS = "#2a78d6"
+COR_BOCEJOS = "#eb6834"
+COR_PICO = "#d03b3b"
 COR_GRADE = "#e1e0d9"
 COR_EIXO = "#c3c2b7"
 COR_TEXTO_PRIMARIO = "#0b0b0b"
