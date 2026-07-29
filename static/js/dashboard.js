@@ -389,6 +389,8 @@ async function carregarFadiga() {
 let streamCamera = null;
 let cicloClassificacao = null;
 let classificandoAgora = false;
+let cicloMalha = null;
+let desenhandoMalhaAgora = false;
 
 async function ligarPreviewCamera() {
   const aviso = document.getElementById("webcam-aviso");
@@ -402,6 +404,7 @@ async function ligarPreviewCamera() {
     document.getElementById("btn-ligar-camera").disabled = true;
     document.getElementById("btn-desligar-camera").disabled = false;
     iniciarClassificacaoAoVivo();
+    iniciarMalhaAoVivo();
   } catch (erro) {
     aviso.textContent = `Nao foi possivel acessar a camera: ${erro.message}. Verifique se ela nao esta em uso por outro programa (ou pela captura Python abaixo) e se o navegador tem permissao.`;
     aviso.classList.remove("is-hidden");
@@ -418,6 +421,7 @@ function desligarPreviewCamera() {
   document.getElementById("btn-ligar-camera").disabled = false;
   document.getElementById("btn-desligar-camera").disabled = true;
   pararClassificacaoAoVivo();
+  pararMalhaAoVivo();
 }
 
 document.getElementById("btn-ligar-camera").addEventListener("click", ligarPreviewCamera);
@@ -492,6 +496,55 @@ function pararClassificacaoAoVivo() {
     cicloClassificacao = null;
   }
   document.getElementById("webcam-expressao").classList.add("is-hidden");
+}
+
+// --- Malha facial ao vivo na pre-visualizacao ---
+//
+// Mesma ideia da janela do reuniao_fadiga.py (contorno do rosto, olhos,
+// sobrancelhas e boca desenhados via MediaPipe), so que aqui o desenho
+// acontece no servidor a cada frame e volta como uma foto anotada, que
+// fica sobreposta ao video. Atualiza a cada ~400ms - nao e um video
+// continuo, e uma sequencia rapida de fotos.
+
+async function desenharMalhaFrameAtual() {
+  if (desenhandoMalhaAgora) return;
+  const imagem = capturarFrameComoJpegBase64();
+  if (!imagem) return;
+
+  desenhandoMalhaAgora = true;
+  try {
+    const resposta = await fetch("/api/webcam/malha", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imagem }),
+    });
+    const payload = await resposta.json();
+    const overlay = document.getElementById("overlay-malha");
+
+    if (payload.rosto_detectado && payload.imagem) {
+      overlay.src = payload.imagem;
+      overlay.classList.remove("is-hidden");
+    } else {
+      overlay.classList.add("is-hidden");
+    }
+  } catch (erro) {
+    document.getElementById("overlay-malha").classList.add("is-hidden");
+  } finally {
+    desenhandoMalhaAgora = false;
+  }
+}
+
+function iniciarMalhaAoVivo() {
+  desenharMalhaFrameAtual();
+  cicloMalha = setInterval(desenharMalhaFrameAtual, 400);
+}
+
+function pararMalhaAoVivo() {
+  if (cicloMalha) {
+    clearInterval(cicloMalha);
+    cicloMalha = null;
+  }
+  document.getElementById("overlay-malha").classList.add("is-hidden");
 }
 
 // --- Controle dos processos de captura (humor_do_dia.py / reuniao_fadiga.py) ---

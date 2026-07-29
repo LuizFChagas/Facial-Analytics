@@ -285,6 +285,16 @@ tbody tr.linha-pico td { color: var(--accent-critical); font-weight: 600; }
   display: block;
   transform: scaleX(-1); /* espelha, como um espelho normal */
 }
+#overlay-malha {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* mesmo espelhamento do video, pra alinhar com o que aparece por baixo */
+}
+#overlay-malha.is-hidden { display: none; }
+
 .webcam-aviso {
   position: absolute;
   inset: 0;

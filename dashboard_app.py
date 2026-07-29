@@ -15,6 +15,7 @@ Uso:
     (abre em http://127.0.0.1:5000)
 """
 
+import base64
 import json
 import os
 import signal
@@ -24,8 +25,15 @@ import threading
 import urllib.error
 import urllib.request
 
+import cv2
+import numpy as np
 import pandas as pd
 from flask import Flask, jsonify, render_template, request
+from mediapipe.tasks.python import vision
+from mediapipe.tasks.python.core import base_options as mp_base_options
+import mediapipe as mp
+
+from reuniao_fadiga import CAMINHO_MODELO, garantir_modelo
 
 app = Flask(__name__)
 
@@ -177,6 +185,67 @@ def api_webcam_classificar():
 
     payload["status"] = "ok"
     return jsonify(payload)
+
+
+# Landmarker (Tasks API) usado so pra desenhar a malha facial na
+# pre-visualizacao da webcam. Diferente do FER, o mediapipe roda de boa
+# no mesmo Python do dashboard - nao precisa do venv 3.11.
+landmarker_malha = None
+
+
+def obter_landmarker_malha():
+    global landmarker_malha
+    if landmarker_malha is None:
+        garantir_modelo()
+        opcoes = vision.FaceLandmarkerOptions(
+            base_options=mp_base_options.BaseOptions(model_asset_path=CAMINHO_MODELO),
+            running_mode=vision.RunningMode.IMAGE,
+            num_faces=1,
+        )
+        landmarker_malha = vision.FaceLandmarker.create_from_options(opcoes)
+    return landmarker_malha
+
+
+@app.route("/api/webcam/malha", methods=["POST"])
+def api_webcam_malha():
+    corpo = request.get_json(silent=True) or {}
+    imagem_base64 = corpo.get("imagem", "")
+    if "," in imagem_base64:
+        imagem_base64 = imagem_base64.split(",", 1)[1]
+
+    try:
+        bytes_imagem = base64.b64decode(imagem_base64)
+    except (ValueError, TypeError):
+        return jsonify({"erro": "imagem invalida"}), 400
+
+    array_bytes = np.frombuffer(bytes_imagem, dtype=np.uint8)
+    frame = cv2.imdecode(array_bytes, cv2.IMREAD_COLOR)
+    if frame is None:
+        return jsonify({"erro": "nao foi possivel decodificar a imagem"}), 400
+
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    imagem_mp = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
+    resultado = obter_landmarker_malha().detect(imagem_mp)
+
+    if not resultado.face_landmarks:
+        return jsonify({"rosto_detectado": False, "imagem": None})
+
+    # Mesmo desenho usado na janela do reuniao_fadiga.py: contorno do
+    # rosto, olhos, sobrancelhas e boca.
+    vision.drawing_utils.draw_landmarks(
+        image=frame,
+        landmark_list=resultado.face_landmarks[0],
+        connections=vision.FaceLandmarksConnections.FACE_LANDMARKS_CONTOURS,
+        landmark_drawing_spec=None,
+        connection_drawing_spec=vision.drawing_styles.get_default_face_mesh_contours_style(),
+    )
+
+    ok, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    if not ok:
+        return jsonify({"erro": "falha ao codificar a imagem"}), 500
+
+    imagem_anotada = "data:image/jpeg;base64," + base64.b64encode(buffer).decode("ascii")
+    return jsonify({"rosto_detectado": True, "imagem": imagem_anotada})
 
 
 def processo_esta_rodando(modo):
