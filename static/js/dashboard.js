@@ -60,7 +60,10 @@ function layoutBase(cores, extra) {
     hoverlabel: {
       bgcolor: cores.tintaPrimaria === "#ffffff" ? "#1a1a19" : "#ffffff",
       bordercolor: "transparent",
-      font: { family: "system-ui, -apple-system, Segoe UI, sans-serif" },
+      // sem isso, o Plotly usa uma cor de texto padrao que nao contrasta
+      // com o bgcolor customizado acima - no tema escuro ficava texto
+      // escuro sobre fundo quase preto, ou seja, invisivel.
+      font: { family: "system-ui, -apple-system, Segoe UI, sans-serif", color: cores.tintaPrimaria },
     },
     bargap: 0.35,
   }, extra);
