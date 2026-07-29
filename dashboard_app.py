@@ -103,11 +103,14 @@ def api_humor():
         return jsonify({"fonte": "vazio", "registros": []})
 
     df = pd.read_csv(CAMINHO_HUMOR_REAL, parse_dates=["timestamp"])
+    if df.empty:
+        return jsonify({"fonte": "vazio", "registros": []})
+
     df["valor_bem_estar"] = df["expressao"].map(ESCALA_BEM_ESTAR)
     df["timestamp"] = df["timestamp"].dt.strftime("%Y-%m-%dT%H:%M:%S")
 
     return jsonify({
-        "fonte": "vazio" if df.empty else "real",
+        "fonte": "real",
         "registros": df.to_dict(orient="records"),
     })
 
